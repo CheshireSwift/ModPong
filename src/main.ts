@@ -1,11 +1,50 @@
 'use strict'
+import * as _ from 'lodash'
 
-window.main = function() {
-  /* global Phaser _ */
-  var game = new Phaser.Game(800, 600, Phaser.CANVAS, '', { preload, create, update })
-  var textureLib
-  var ball
-  var players = {
+interface Players {
+    left: Player;
+    right: Player;
+    each(f: (player: Player) => void);
+    populate(field: String, computation: (data: PlayerData) => any);
+    map<T>(f: string | ((player: Player) => T)): T[];
+    both?: Player[];
+}
+
+interface Player {
+    data: () => PlayerData;
+    paddle?: Paddle;
+    keys?: PlayerKeyMap<Phaser.Key>;
+}
+
+interface PlayerData {
+    xPos: number;
+    tint: number;
+    keys: PlayerKeyMap<number>;
+}
+
+interface PlayerKeyMap<T> {
+    up: T;
+    down: T;
+}
+
+interface Paddle extends Phaser.Sprite {
+  ballTint: number;
+}
+
+interface RenderLibrary {
+  [key: string]: (graphics: Phaser.Graphics) => void
+}
+
+interface TextureLibrary {
+  [key: string]: PIXI.Texture
+}
+
+window['main'] = function() {
+  var debugElem = document.getElementById('debug');
+  var game = new Phaser.Game(800, 600, Phaser.CANVAS, '', { preload, create, update });
+  var textureLib: TextureLibrary;
+  var ball: Phaser.Sprite;
+  var players: Players = {
     left: {
       data: () => ({
         xPos: 25,
@@ -21,22 +60,19 @@ window.main = function() {
       })
     },
     each: function(f) {
-      console.log(this.both)
-      _.forEach(this.both, f)
+      _.forEach(this.both, f);
     },
     populate: function(field, computation) {
       this.each(player => {
-        _.set(player, field, computation(player.data()))
+        _.set(player, field, computation(player.data()));
       })
     },
-    map: function(f) {
-      return _.map(this.both, f)
-    }
+    map: function(f) { return _.map(this.both, f) }
   }
   players.both = [players.left, players.right]
 
   function preload() {
-    var renderLib = {
+    var renderLib: RenderLibrary = {
       ball: function(graphics) {
         graphics.drawRect(0, 0, 12, 12)
       },
@@ -45,7 +81,7 @@ window.main = function() {
       }
     }
 
-    function renderTexture(graphicsCommands) {
+    function renderTexture(graphicsCommands: (graphics: Phaser.Graphics) => void): PIXI.Texture {
       var graphics = new Phaser.Graphics(game)
       graphics.beginFill(0xffffff)
       graphicsCommands(graphics)
@@ -57,18 +93,20 @@ window.main = function() {
   }
 
   function create() {
-    function applyPhysicsDefaults(sprite) {
+    function applyPhysicsDefaults(sprite: Phaser.Sprite) {
       sprite.anchor.set(0.5, 0.5)
       game.physics.enable(sprite, Phaser.Physics.ARCADE)
       sprite.checkWorldBounds = true
       sprite.body.collideWorldBounds = true
     }
 
-    function createPaddle(data) {
-      var paddle = game.add.sprite(data.xPos, game.world.centerY, textureLib.paddle)
+    function createPaddle(data: PlayerData) {
+      var paddle: Paddle = _.assign<Phaser.Sprite, Paddle>(
+        game.add.sprite(data.xPos, game.world.centerY, textureLib['paddle']),
+        { ballTint: data.tint }
+      )
       applyPhysicsDefaults(paddle)
       paddle.body.immovable = true
-      paddle.ballTint = data.tint
       return paddle
     }
 
@@ -78,7 +116,7 @@ window.main = function() {
 
     game.physics.startSystem(Phaser.Physics.ARCADE)
 
-    ball = game.add.sprite(game.world.centerX, game.world.centerY, textureLib.ball)
+    ball = game.add.sprite(game.world.centerX, game.world.centerY, textureLib['ball'])
     applyPhysicsDefaults(ball)
     ball.body.bounce.set(1)
 
@@ -91,7 +129,7 @@ window.main = function() {
 
   function update() {
     var debugText = ''
-    function debugDisplay(s) {
+    function debugDisplay(s: string) {
       debugText += s + '\n'
     }
 
@@ -105,12 +143,12 @@ window.main = function() {
       }
     })
 
-    game.physics.arcade.collide(ball, players.map('paddle'), function (ball, paddle) {
+    game.physics.arcade.collide(ball, players.map('paddle'), function (ball: Phaser.Sprite, paddle: Paddle) {
       console.log(`ball ${ball.position} collided with paddle ${paddle.position} (tint ${paddle.ballTint.toString(16)})`)
       ball.tint = paddle.ballTint
     })
 
     debugDisplay(JSON.stringify(ball.position, null, 2))
-    document.getElementById('debug').innerText = debugText
+    debugElem.innerText = debugText
   }
 }
